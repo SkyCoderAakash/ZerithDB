@@ -167,11 +167,103 @@ describe("DbClient — CollectionClient", () => {
   });
 
   describe("count()", () => {
-    it("should return correct document count", async () => {
-      const col = db.collection<{ x: number }>("counts");
-      await col.insertMany([{ x: 1 }, { x: 2 }, { x: 3 }]);
-      expect(await col.count()).toBe(3);
-      expect(await col.count({ x: { $gt: 1 } })).toBe(2);
+    beforeEach(async () => {
+      const col = db.collection<{ priority: number; status: string; tags: string[] }>("test");
+      await col.insertMany([
+        { priority: 1, status: "active", tags: ["urgent", "work"] },
+        { priority: 2, status: "pending", tags: ["work"] },
+        { priority: 3, status: "active", tags: ["personal"] },
+        { priority: 1, status: "done", tags: ["urgent"] },
+        { priority: 4, status: "active", tags: ["work", "urgent"] },
+        { priority: 2, status: "pending", tags: ["personal"] },
+      ]);
+    });
+
+    // Basic counts
+    it("should return total document count", async () => {
+      const col = db.collection("test");
+      expect(await col.count()).toBe(6);
+    });
+
+    it("should return 0 for empty collection", async () => {
+      const empty = db.collection("empty");
+      expect(await empty.count()).toBe(0);
+    });
+
+    // Simple equality
+    it("should count with simple equality", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ status: "active" })).toBe(3);
+    });
+
+    it("should count with $eq operator", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ status: { $eq: "pending" } })).toBe(2);
+    });
+
+    // Comparison operators
+    it("should count with $gt", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ priority: { $gt: 2 } })).toBe(2);
+    });
+
+    it("should count with $gte", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ priority: { $gte: 2 } })).toBe(4);
+    });
+
+    it("should count with $lt", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ priority: { $lt: 2 } })).toBe(2);
+    });
+
+    it("should count with $lte", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ priority: { $lte: 2 } })).toBe(4);
+    });
+
+    // Array operators
+    it("should count with $in", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ priority: { $in: [1, 3] } })).toBe(3);
+    });
+
+    it("should count with $nin", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ priority: { $nin: [1, 2] } })).toBe(2);
+    });
+
+    // Not equal operator
+    it("should count with $ne", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ status: { $ne: "active" } })).toBe(3);
+    });
+
+    // Combined filters
+    it("should count with multiple simple conditions", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ status: "active", priority: 1 })).toBe(1);
+    });
+
+    it("should count with mixed simple and complex", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ status: "active", priority: { $gt: 2 } })).toBe(1);
+    });
+
+    it("should count with multiple complex operators", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ priority: { $gte: 2, $lte: 3 } })).toBe(3);
+    });
+
+    // Edge cases
+    it("should return 0 for non-matching filter", async () => {
+      const col = db.collection("test");
+      expect(await col.count({ status: "nonexistent" })).toBe(0);
+    });
+
+    it("should handle empty object filter", async () => {
+      const col = db.collection("test");
+      expect(await col.count({})).toBe(6);
     });
   });
 });

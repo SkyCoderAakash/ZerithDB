@@ -169,10 +169,53 @@ export class CollectionClient<T extends Record<string, any> = Record<string, any
 
   /**
    * Count documents matching a filter.
+   * Uses Dexie's native count when possible for better performance.
+   *
+   * @example
+   * ```typescript
+   * const total = await todos.count();
+   * const pending = await todos.count({ done: false });
+   * const highPriority = await todos.count({ priority: { $gte: 3 } });
+   * ```
    */
   async count(filter: QueryFilter<T> = {}): Promise<number> {
-    const docs = await this.find(filter);
-    return docs.length;
+    try {
+      // Fast path: no filter - use Dexie's built-in count
+      if (Object.keys(filter).length === 0) {
+        return await this.table.count();
+      }
+
+      // Detect complex operators like $gt, $lt, $in, $nin, etc.
+      const hasComplexOps = Object.values(filter).some(
+        (v) =>
+          v && typeof v === "object" && Object.keys(v).some((k) => k !== "$eq" && k.startsWith("$"))
+      );
+
+      // Simple equality filters - filter in memory (fast enough for most datasets)
+      if (!hasComplexOps) {
+        // Fix: Change type from Table to any or Collection
+        let collection: any = this.table;
+
+        for (const [key, value] of Object.entries(filter)) {
+          const targetValue =
+            value && typeof value === "object" && "$eq" in value ? value.$eq : value;
+          collection = collection.filter((doc: Document<T>) => doc[key] === targetValue);
+        }
+
+        const allDocs = await collection.toArray();
+        return allDocs.length;
+      }
+
+      // Complex operators - must fetch all and filter in memory
+      const allDocs = await this.table.toArray();
+      return allDocs.filter((doc: Document<T>) => this.matchesFilter(doc, filter)).length;
+    } catch (err) {
+      throw new ZerithDBError(
+        ErrorCode.DB_READ_FAILED,
+        `Failed to count documents in "${this.collectionName}"`,
+        { cause: err }
+      );
+    }
   }
 
   private matchesFilter(doc: Document<T>, filter: QueryFilter<T>): boolean {
