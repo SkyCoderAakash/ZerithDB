@@ -14,11 +14,19 @@ export async function signalCommand(options: { port: string }): Promise<void> {
         `--eval`,
         // Inline the minimal signaling server for dev usage
         `
+import chalk from "chalk";
 import { WebSocketServer } from 'ws';
+import fs from 'fs';
+import path from 'path';
 const PORT = ${port};
 const rooms = new Map();
 const wss = new WebSocketServer({ port: PORT });
+const maintenanceFile = path.join(process.cwd(), '.maintenance');
 wss.on('connection', (ws, req) => {
+  if (fs.existsSync(maintenanceFile)) {
+    ws.close(1012, 'Maintenance mode');
+    return;
+  }
   const url = new URL(req.url, 'http://localhost');
   const roomId = url.searchParams.get('room');
   const peerId = url.searchParams.get('peer');
@@ -37,8 +45,8 @@ wss.on('connection', (ws, req) => {
   });
   ws.on('close', () => { room.delete(entry); if (room.size === 0) rooms.delete(roomId); });
 });
-console.log('✅ Signaling server running at ws://localhost:${port}');
-console.log('   Press Ctrl+C to stop.');
+console.log(chalk.green("✅ Signaling server running at ws://localhost:${port}"));
+console.log(chalk.gray('   Press Ctrl+C to stop.'));
         `,
       ],
       { stdio: "inherit" }

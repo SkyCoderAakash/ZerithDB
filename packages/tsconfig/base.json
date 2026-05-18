@@ -8,7 +8,11 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
-    "downlevelIteration": true
+    "moduleResolution": "bundler",
+    "downlevelIteration": true,
+    "paths": {
+      "zerithdb-auth": ["../auth/src/index.ts"],
+      "zerithdb-auth/*": ["../auth/src/*"]
+    }
   }
 }
